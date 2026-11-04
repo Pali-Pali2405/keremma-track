@@ -36,6 +36,7 @@ body{font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   margin:0; font-size:34px; line-height:1; font-weight:800; font-stretch:125%;
   letter-spacing:.04em; color:var(--ink);
 }
+.name .logo{display:block;height:40px;width:auto;max-width:calc(100% - 36px)}
 .name small{display:block;margin-top:6px;font-size:13px;font-weight:400;font-stretch:100%;letter-spacing:0;color:var(--muted)}
 .when{margin:14px 0 0;font-size:15px}
 .when strong{font-weight:650}
@@ -84,6 +85,7 @@ button:focus-visible,.leaflet-bar a:focus-visible{outline:2px solid var(--focus)
 @media (max-width:600px){
   .panel{left:0;right:0;bottom:0;width:auto;max-width:none;border-radius:16px 16px 0 0;padding:16px 16px calc(14px + env(safe-area-inset-bottom))}
   .name{font-size:28px}
+  .name .logo{height:34px}
   .toggle{display:block}
   .panel.min .figs,.panel.min .trip,.panel.min .actions{display:none}
   .leaflet-bottom.leaflet-right{bottom:var(--sheet,0px)}
@@ -95,7 +97,7 @@ button:focus-visible,.leaflet-bar a:focus-visible{outline:2px solid var(--focus)
 
 <section class="panel" id="panel" aria-live="polite">
   <button class="toggle" id="toggle" aria-label="Réduire le panneau" aria-expanded="true">▾</button>
-  <h1 class="name">KEREMMA<small>Voilier Harmony 38, MMSI 227383420</small></h1>
+  <h1 class="name"><picture><source srcset="logo-keremma-sombre.png" media="(prefers-color-scheme: dark)"><img class="logo" src="logo-keremma-clair.png" alt="KEREMMA" width="720" height="133"></picture><small>Voilier Harmony 38, MMSI 227383420</small></h1>
   <div id="content"><p class="msg">Chargement du parcours…</p></div>
 </section>
 
