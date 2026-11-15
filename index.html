@@ -66,6 +66,7 @@ button:focus-visible,.leaflet-bar a:focus-visible{outline:2px solid var(--focus)
 
 /* Bateau */
 .boat{transition:transform .3s}
+.ancre svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
 .boat svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 
 /* Popups */
@@ -109,6 +110,8 @@ button:focus-visible,.leaflet-bar a:focus-visible{outline:2px solid var(--focus)
 const GAP_S = 3 * 3600;            // au-delà : système éteint, segment en pointillés
 const LIVE_S = 30 * 60;            // point récent : pastille verte
 const REFRESH_MS = 5 * 60 * 1000;
+// Arrêts : au moins STOP_MIN_PTS points GPS dans un rayon de STOP_RADIUS_M, sur STOP_MIN_S au moins.
+const STOP_RADIUS_M = 150, STOP_MIN_PTS = 4, STOP_MIN_S = 45 * 60;
 const DOTS_MIN_ZOOM = 10, DOTS_MAX = 2500, HIT_PX = 16;
 
 const fmtDate = new Intl.DateTimeFormat("fr-FR", {weekday:"short", day:"numeric", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit"});
@@ -132,6 +135,7 @@ map.setView([46.5, -4], 6);
 const renderer = L.canvas({padding:.5});
 const trackLayer = L.layerGroup().addTo(map);
 const dotLayer = L.layerGroup().addTo(map);
+const stopLayer = L.layerGroup().addTo(map);
 let boatMarker = null, hilite = null;
 let pts = [], latest = null, lastUpdated = null, firstLoad = true;
 
@@ -186,6 +190,64 @@ function draw(){
   boatMarker = L.marker([last.lat, last.lon], {icon, keyboard:true, title:"Dernière position", zIndexOffset:1000})
     .on("click", () => openPoint(pts.length-1)).addTo(map);
   drawDots();
+  drawStops();
+}
+
+// ---------- arrêts (mouillages, ports)
+function distM(a, b){
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+  const h = Math.sin(dLat/2)**2 + Math.cos(a.lat*r) * Math.cos(b.lat*r) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function findStops(){
+  const stops = [];
+  let i = 0;
+  while (i < pts.length){
+    // Prolonge tant que les points restent dans le rayon du centre courant.
+    let j = i + 1, sLat = pts[i].lat, sLon = pts[i].lon, n = 1;
+    while (j < pts.length && distM({lat:sLat/n, lon:sLon/n}, pts[j]) <= STOP_RADIUS_M){
+      sLat += pts[j].lat; sLon += pts[j].lon; n++; j++;
+    }
+    const t0 = pts[i].t, t1 = pts[j-1].t;
+    if (n >= STOP_MIN_PTS && t1 - t0 >= STOP_MIN_S){
+      stops.push({lat:sLat/n, lon:sLon/n, t0, t1, n, i0:i, i1:j-1});
+      i = j;
+    } else i++;
+  }
+  // Fusionne deux arrêts voisins au même endroit (ex. un point aberrant au milieu).
+  const out = [];
+  for (const s of stops){
+    const p = out[out.length-1];
+    if (p && distM(p, s) <= 3 * STOP_RADIUS_M && s.i0 - p.i1 <= 6){
+      const n = p.n + s.n;
+      p.lat = (p.lat*p.n + s.lat*s.n)/n; p.lon = (p.lon*p.n + s.lon*s.n)/n;
+      p.n = n; p.t1 = s.t1; p.i1 = s.i1;
+    } else out.push(s);
+  }
+  return out;
+}
+function dureeTxt(s){
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h} h ${String(m % 60).padStart(2,"0")}`;
+  return `${Math.floor(h/24)} j ${h % 24} h`;
+}
+const ANCRE_SVG = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#13304f" stroke="#fff" stroke-width="1.6"/><g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="6.3" r="1.6"/><path d="M12 7.9V18.5M8.6 10.6h6.8M6.4 13.6c.6 3 3 4.9 5.6 4.9s5-1.9 5.6-4.9"/></g></svg>`;
+function drawStops(){
+  stopLayer.clearLayers();
+  const icon = L.divIcon({className:"ancre", html:ANCRE_SVG, iconSize:[22,22], iconAnchor:[11,11]});
+  for (const s of findStops()){
+    if (s.i1 === pts.length - 1) continue; // arrêt en cours : le bateau est déjà affiché
+    const d0 = new Date(s.t0 * 1000), d1 = new Date(s.t1 * 1000);
+    const html = `<div class="pp">
+      <p class="pp-date">Arrêt de ${dureeTxt(s.t1 - s.t0)}</p>
+      <p class="pp-sub">Du ${fmtDate.format(d0)}<br>au ${fmtDate.format(d1)}</p>
+      <table><tr><td>Position</td><td>${dm(s.lat,"N","S")}<br>${dm(s.lon,"E","O")}</td></tr></table></div>`;
+    L.marker([s.lat, s.lon], {icon, title:`Arrêt de ${dureeTxt(s.t1 - s.t0)}`, zIndexOffset:500})
+      .bindPopup(html, {maxWidth:300}).addTo(stopLayer);
+  }
 }
 
 function drawDots(){
